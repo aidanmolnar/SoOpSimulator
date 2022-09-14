@@ -7,6 +7,7 @@ from soopsimulator.constellations import (
     ConstellationCollection,
 )
 
+
 # Test OrbitDefinition calculations
 def test_1():
     # ISS orbit

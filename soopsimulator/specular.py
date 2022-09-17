@@ -2,7 +2,7 @@ import numpy as np
 from numpy.lib.scimath import sqrt
 
 
-RAD_EARTH = 6378.1  # Approximate radius of earth (km)
+RAD_EARTH = 6371  # Approximate radius of earth (km)
 
 
 # Compute the specular reflection points between all pairs of z1 and z2

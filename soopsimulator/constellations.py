@@ -125,7 +125,7 @@ class ConstellationCollection:
         return np.average(epochs)
 
     # Get IRTS coordinates of satellites over time samples defined by propagation config
-    # Returns a numpy array of (len(satellites), len(time samples), 3)
+    # Returns a numpy array of (len(time samples), len(satellites) , 3)
     # Last dimension is x,y,z in IRTS
     def propagate_orbits(self, propagation_config: PropagationConfig) -> np.ndarray:
         satellites = self.get_satellites()
@@ -143,4 +143,4 @@ class ConstellationCollection:
             pos = geocentric.frame_xyz(itrs).km.transpose()
             pos_arrays.append(pos)
 
-        return np.stack(pos_arrays)
+        return np.stack(pos_arrays, axis=1)

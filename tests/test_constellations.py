@@ -42,7 +42,7 @@ def test_2():
     # Length of np.arrange is numerically unstable, check that its close to expected.
     assert len_t == pytest.approx(t_range / t_step, 1.1)
     # Check output has correct shape
-    assert positions.shape == (4, len_t, 3)
+    assert positions.shape == (len_t, 4, 3)
     # Check all positions are valid
     assert not np.isnan(positions).any()
 
@@ -78,7 +78,7 @@ def test_3():
     # Length of np.arrange is numerically unstable, check that its close to expected.
     assert len_t == pytest.approx(t_range / t_step, 1.1)
     # Check output has correct shape
-    assert positions.shape == (5, len_t, 3)
+    assert positions.shape == (len_t, 5, 3)
     # Check all positions are valid
     assert not np.isnan(positions).any()
 
@@ -137,8 +137,8 @@ def test_6():
     )
 
     # Compute difference from average x and y position for each satellite
-    averages = np.average(positions[3:, :, 0:2], axis=1, keepdims=True)
-    delta = positions[3:, :, 0:2] - averages
+    averages = np.average(positions[:, 3:, 0:2], axis=0, keepdims=True)
+    delta = positions[:, 3:, 0:2] - averages
 
     # Check variations are less than 100km
     assert (np.abs(delta) < 100).all()

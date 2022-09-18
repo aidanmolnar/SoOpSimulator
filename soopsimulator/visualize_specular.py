@@ -4,6 +4,7 @@ import pyvista as pv
 
 from constellations import Constellation, ConstellationCollection, PropagationConfig
 from specular import find_specular_points, RAD_EARTH
+from export_vtkjs import export_vtkjs
 
 constellations = [Constellation.from_tle("TLE/gps.txt", None)]
 collections = ConstellationCollection(constellations)
@@ -41,32 +42,33 @@ def get_tube(points, radius=100.0):
 view_points = np.stack(
     (points[:, receiver, :], specular, specular, points[:, transmitter, :]), axis=1
 )
-
+skip = 2
+scalars = np.repeat(np.arange(view_points.shape[0])[0::skip], 4)
+view_points = view_points[0::skip, ...]
 view_points = view_points.reshape(-1, 3)
+
 reflect_lines = pv.helpers.line_segments_from_points(view_points)
-reflect_lines["scalars"] = np.repeat(np.arange(specular.shape[0]), 4)
+reflect_lines["scalars"] = scalars
 
-reflect_tubes = reflect_lines.tube(radius=20.0)
 
+pv.global_theme.cmap = "rainbow"
 p = pv.Plotter()
 
 
-mb = pv.MultiBlock()
+data = {
+    "sphere": pv.Sphere(radius=RAD_EARTH),
+    "receiver": get_tube(points[:, receiver, :]),
+    "transmitter": get_tube(points[:, transmitter, :]),
+    "specular": get_tube(specular),
+    "reflect": reflect_lines.tube(radius=50.0),
+}
 
-mb.append(pv.Sphere(radius=RAD_EARTH))
-
-mb.append(get_tube(points[:, receiver, :]))
-mb.append(get_tube(points[:, transmitter, :]))
-mb.append(get_tube(specular))
-
-
-mb.append(reflect_tubes)
-
+mb = pv.MultiBlock(data)
 
 p.add_mesh(mb, smooth_shading=True)
+p.set_background("black")
 
-
-p.export_vtkjs("pyvista")
+export_vtkjs(p, "site/src/scenes/gps")
 p.show()
 
 

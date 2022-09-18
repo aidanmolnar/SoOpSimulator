@@ -1,0 +1,34 @@
+{
+  "name": "soop-simulator-demo",
+  "version": "0.0.1",
+  "description": "Interactive web visualization of signals of opportunity simulator using vtkjs.",
+  "main": "index.js",
+  "scripts": {
+    "build": "webpack --progress --mode=development",
+    "start": "webpack serve --progress --mode=development --static=dist",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "github.com/aidanmolnar/SoOpSimulator"
+  },
+  "keywords": [
+    "vtk.js",
+    "Signals",
+    "Opportunity",
+    "Earth",
+    "Observation",
+    "Satellite",
+    "Visualization"
+  ],
+  "author": "Aidan Molnar",
+  "license": "MIT",
+  "dependencies": {
+    "@kitware/vtk.js": "^25.8.1"
+  },
+  "devDependencies": {
+    "webpack": "^5.74.0",
+    "webpack-cli": "^4.10.0",
+    "webpack-dev-server": "^4.11.0"
+  }
+}

@@ -112,7 +112,7 @@ def test4():
     S = find_specular_points(R, T)
 
     # Used 2d Solidworks CAD sketch to get S_expect
-    S_expect = np.array([4923.35, 4054.72, 0.0])
+    S_expect = np.array([4916.45, 4051.93, 0.0])
     np.testing.assert_array_almost_equal(S[0, 0, 0, :], S_expect, decimal=2)
 
 
@@ -130,7 +130,7 @@ def test5():
     # Used 2d Solidworks CAD sketch to get S_expect
     S = find_specular_points(R, T)
 
-    S_expect = np.array([4092.69, 4891.83, 0.0])
+    S_expect = np.array([4088.87, 4885.77, 0.0])
     np.testing.assert_array_almost_equal(S[0, 0, 0, :], S_expect, decimal=2)
 
 

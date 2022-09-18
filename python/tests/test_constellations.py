@@ -28,7 +28,7 @@ def test_1():
 # Check output dimensions of single constellation from tle
 def test_2():
     collection = ConstellationCollection(
-        [Constellation.from_tle("TLE/muos.txt", None)],  # Contains 4 satellites
+        [Constellation.from_tle("data/TLE/muos.txt", None)],  # Contains 4 satellites
     )
 
     t_step = 0.1
@@ -86,7 +86,7 @@ def test_3():
 # Check low altitude satellites (spacebee) are valid over long time frame (1 year)
 def test_4():
     collection = ConstellationCollection(
-        [Constellation.from_tle("TLE/spacebee.txt", None)],
+        [Constellation.from_tle("data/TLE/spacebee.txt", None)],
     )
 
     t_step = 2.0
@@ -129,7 +129,7 @@ def test_5():
 # Ideally would be fixed in IRTS frame
 def test_6():
     collection = ConstellationCollection(
-        [Constellation.from_tle("TLE/skynet.txt", None)],
+        [Constellation.from_tle("data/TLE/skynet.txt", None)],
     )
 
     positions = collection.propagate_orbits(

@@ -31,7 +31,7 @@ def find_specular_points(z1, z2, rad_earth=RAD_EARTH):
     b = np.reshape(np.einsum("ijkl,ijkl->ijk", z1, z2), (n_t, n_z1, n_z2))
     c = np.reshape(np.einsum("ijkl,ijkl->ik",  z2, z2), (n_t, 1,    n_z2))
 
-    # Coefficients of quartic equation
+    # Coefficients of quartic equation from reference
     A = 4. * c * (a * c - b**2.)
     B = -4. * (a * c - b**2.)
     C = a + 2. * b + c - 4. * a * c

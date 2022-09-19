@@ -68,7 +68,7 @@ def test_3():
 
 # Test finding specular points (90 degrees apart in different octants)
 # Multiple times
-def test3():
+def test_4():
     n_t = 3
     n_R = 1
     n_T = 1
@@ -100,7 +100,7 @@ def test3():
 
 
 # Test more complicated specular arangement
-def test4():
+def test_5():
     n_t = 1
     n_R = 1
     n_T = 1
@@ -117,7 +117,7 @@ def test4():
 
 
 # Test more complicated specular arangement with large values.
-def test5():
+def test_6():
     n_t = 1
     n_R = 1
     n_T = 1
@@ -135,7 +135,7 @@ def test5():
 
 
 # Test arrangement that has invalid specular point
-def test6():
+def test_7():
     n_t = 1
     n_R = 1
     n_T = 1
@@ -153,7 +153,7 @@ def test6():
 
 
 # Test multiple transmitters and receivers
-def test7():
+def test_8():
     n_t = 1
     n_R = 2
     n_T = 2
@@ -186,3 +186,6 @@ def test7():
         [-np.cos(np.deg2rad(45)), 0.0, np.cos(np.deg2rad(45))],
     )
     np.testing.assert_array_almost_equal(S[0, 1, 1, :], S_expect)
+
+
+# TODO: Add tests that check angle of incidence with transmitter / receiver is the same

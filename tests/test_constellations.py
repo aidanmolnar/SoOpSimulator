@@ -142,3 +142,6 @@ def test_6():
 
     # Check variations are less than 100km
     assert (np.abs(delta) < 100).all()
+
+
+# TODO: test angle constraint array making

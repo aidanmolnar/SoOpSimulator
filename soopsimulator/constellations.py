@@ -60,8 +60,15 @@ class Constellation:
     def from_tle(
         tle_path: str,
         antenna_configuration: AntennaConfiguration,
+        indices_to_use=None,
     ):
-        return Constellation(load.tle_file(tle_path), antenna_configuration)
+        satellites = load.tle_file(tle_path)
+        if indices_to_use is None:
+            return Constellation(satellites, antenna_configuration)
+        else:
+            return Constellation(
+                [satellites[i] for i in indices_to_use], antenna_configuration
+            )
 
     def from_orbit_definitions(
         orbit_definitions: list[OrbitDefinition],
@@ -144,3 +151,26 @@ class ConstellationCollection:
             pos_arrays.append(pos)
 
         return np.stack(pos_arrays, axis=1)
+
+    # TODO: needs tests
+    # TODO: needs better name
+    # Returns the satellite antenna nadir and zenith cone angle (in deg)
+    def get_angles(self):
+        nadir_angle_list = []
+        zenith_angle_list = []
+
+        for constellation in self.constellations:
+            config = constellation.antenna_configuration
+            num_satellites = len(constellation.satellites)
+
+            nadir_angle_list.append(
+                np.ones(num_satellites) * config.nadir_cone_angle,
+            )
+            zenith_angle_list.append(
+                np.ones(num_satellites) * config.zenith_cone_angle,
+            )
+
+        nadir_angle_arr = np.stack(nadir_angle_list, axis=0)
+        zenith_angle_arr = np.stack(zenith_angle_list, axis=0)
+
+        return (nadir_angle_arr, zenith_angle_arr)

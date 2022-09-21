@@ -1,0 +1,15 @@
+[package]
+name = "soopsimulator"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "rust_sim_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+numpy = "0.17.2"
+pyo3 = { version = "0.17.1", features = ["extension-module"] }
+
+[package.metadata.maturin]
+name = "rust_sim_core"

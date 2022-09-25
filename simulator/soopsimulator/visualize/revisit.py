@@ -8,6 +8,7 @@ from simulator.soopsimulator.python_sim_core.revisit import (
     count_on_sphere,
     projection_to_sphere,
     PROJECTION_LENGTH,
+    setup_count,
 )
 
 from specular import plot_transmitter_receiver_pair
@@ -98,14 +99,15 @@ def plot_iridium_gps():
 
     import time
 
+    grid_size = 1.0
+
     start = time.time()
-    count_s = np.zeros((1000, 1000), dtype=np.uint32)
-    count_n = np.zeros((1000, 1000), dtype=np.uint32)
+    count_s, count_n = setup_count(grid_size)
     count_on_sphere(speculars, count_s, count_n)
     print("Numba: %.2f (s)" % (time.time() - start))
 
     start = time.time()
-    count_s, count_n = find_revisits(speculars)
+    count_s, count_n = find_revisits(speculars, grid_size)
     print("Rust: %.2f (s)" % (time.time() - start))
 
     p = pv.Plotter()

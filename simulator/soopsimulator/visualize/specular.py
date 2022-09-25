@@ -4,7 +4,9 @@ from simulator.soopsimulator.constellations import (
     PropagationConfig,
 )
 from simulator.soopsimulator.python_sim_core.specular import RAD_EARTH
-from rust_sim_core import find_specular_points
+
+# from rust_sim_core import find_specular_points
+from simulator.soopsimulator.python_sim_core.specular_numba import find_specular_points
 
 from export_vtkjs import export_vtkjs
 

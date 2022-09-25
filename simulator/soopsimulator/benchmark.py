@@ -6,6 +6,9 @@ from simulator.soopsimulator.constellations import (
 )
 
 from python_sim_core.specular import find_specular_points as find_specular_points_py
+from python_sim_core.specular_numba import (
+    find_specular_points as find_specular_points_nb,
+)
 from rust_sim_core import find_specular_points as find_specular_points_rs
 import time
 
@@ -39,7 +42,8 @@ receiver_constellations = [Constellation.from_orbit_definitions(receiver_orbits,
 receiver_collections = ConstellationCollection(receiver_constellations)
 receiver_positions = receiver_collections.propagate_orbits(prop_config)
 
-# Run 1: 188 s
+# Run 1: 154
+# Run 2:
 start = time.time()
 specular_py = find_specular_points_py(
     transmitter_positions,  # noqa
@@ -48,7 +52,18 @@ specular_py = find_specular_points_py(
 print("Numpy: %.2f (s)" % (time.time() - start))
 del specular_py
 
-# Run 1: 54 s
+# Run 1: 33.4
+# Run 2:
+start = time.time()
+specular_nb = find_specular_points_nb(
+    transmitter_positions,  # noqa
+    receiver_positions,  # noqa
+)
+print("Numba: %.2f (s)" % (time.time() - start))
+del specular_nb
+
+# Run 1: 5.92
+# Run 2:
 start = time.time()
 specular = find_specular_points_rs(
     transmitter_positions,  # noqa

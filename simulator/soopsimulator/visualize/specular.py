@@ -4,9 +4,12 @@ from simulator.soopsimulator.constellations import (
     PropagationConfig,
 )
 from simulator.soopsimulator.python_sim_core.specular import (
-    find_specular_points,
+    # find_specular_points,
     RAD_EARTH,
 )
+
+from rust_sim_core import find_specular_points
+
 from export_vtkjs import export_vtkjs
 
 import numpy as np
@@ -118,6 +121,8 @@ if __name__ == "__main__":
         points[:, transmitter : transmitter + 1, :],  # noqa
     )
     specular_positions = np.squeeze(specular)
+
+    print(specular_positions)
 
     pv.global_theme.cmap = "jet"
     p = pv.Plotter()

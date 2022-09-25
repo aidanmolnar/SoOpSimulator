@@ -3,11 +3,7 @@ from simulator.soopsimulator.constellations import (
     ConstellationCollection,
     PropagationConfig,
 )
-from simulator.soopsimulator.python_sim_core.specular import (
-    # find_specular_points,
-    RAD_EARTH,
-)
-
+from simulator.soopsimulator.python_sim_core.specular import RAD_EARTH
 from rust_sim_core import find_specular_points
 
 from export_vtkjs import export_vtkjs
@@ -26,10 +22,10 @@ def polyline_from_points(points):
 
 
 def get_tube(points, radius=100.0):
-    polyline = polyline_from_points(points)
-    polyline["scalars"] = np.arange(polyline.n_points)
+    polyline = polyline_from_points(np.nan_to_num(points))
+    # polyline = pv.Spline(points, 1000)
+    polyline["scalars"] = np.arange(polyline.n_points, dtype=float)
     tube = polyline.tube(radius=radius)
-    # tube.plot(smooth_shading=True)
     return tube
 
 
@@ -75,36 +71,11 @@ def plot_transmitter_receiver_pair(
     if plot_reflect_lines:
         mb.append(reflect_lines.tube(radius=reflect_line_radius))
 
-    plotter.add_mesh(mb, smooth_shading=True)
-    plotter.set_background("black")
+    plotter.add_mesh(mb, smooth_shading=True, opacity=1.0)
+    # plotter.set_background("black")
 
 
-# Adds a slider that updates lines showing path of reflected signal
-def add_slider():
-    def create_line(index):
-        index = int(index)
-
-        R = points[index, receiver, :]
-        T = points[index, transmitter, :]
-        S = specular[index, :]
-
-        p.add_mesh(
-            pv.Line(R, S).tube(radius=100.0),
-            smooth_shading=True,
-            name="line1",
-            color="w",
-        )
-        p.add_mesh(
-            pv.Line(S, T).tube(radius=100.0),
-            smooth_shading=True,
-            name="line2",
-            color="w",
-        )
-
-    p.add_slider_widget(create_line, [0, points.shape[0] - 1], title="")
-
-
-if __name__ == "__main__":
+def plot_gps_pair():
     constellations = [Constellation.from_tle("data/TLE/gps.txt", None)]
     collections = ConstellationCollection(constellations)
 
@@ -122,8 +93,6 @@ if __name__ == "__main__":
     )
     specular_positions = np.squeeze(specular)
 
-    print(specular_positions)
-
     pv.global_theme.cmap = "jet"
     p = pv.Plotter()
 
@@ -136,3 +105,67 @@ if __name__ == "__main__":
 
     export_vtkjs(p, "demosite/src/scenes/gps")
     p.show()
+
+    # Adds a slider that updates lines showing path of reflected signal
+    def add_slider():
+        def create_line(index):
+            index = int(index)
+
+            R = points[index, receiver, :]
+            T = points[index, transmitter, :]
+            S = specular[index, :]
+
+            p.add_mesh(
+                pv.Line(R, S).tube(radius=100.0),
+                smooth_shading=True,
+                name="line1",
+                color="w",
+            )
+            p.add_mesh(
+                pv.Line(S, T).tube(radius=100.0),
+                smooth_shading=True,
+                name="line2",
+                color="w",
+            )
+
+        p.add_slider_widget(create_line, [0, points.shape[0] - 1], title="")
+
+
+def plot_gps_with_iridium():
+    prop_config = PropagationConfig(t_step=0.001, t_range=0.5)
+
+    receiver_constellations = [Constellation.from_tle("data/TLE/gps.txt", None)]
+    receiver_collections = ConstellationCollection(receiver_constellations)
+    transmitter_positions = receiver_collections.propagate_orbits(prop_config)
+
+    receiver_constellations = [Constellation.from_tle("data/TLE/iridium.txt", None)]
+    receiver_collections = ConstellationCollection(receiver_constellations)
+    receiver_positions = receiver_collections.propagate_orbits(prop_config)
+
+    receiver = 0
+    transmitter = 0
+
+    specular = find_specular_points(
+        transmitter_positions,  # noqa
+        receiver_positions,  # noqa
+    )
+    specular_positions = np.squeeze(specular)  # noqa
+
+    pv.global_theme.cmap = "jet"
+    p = pv.Plotter()
+
+    plot_transmitter_receiver_pair(
+        p,
+        receiver_positions[:, receiver, :],
+        transmitter_positions[:, transmitter, :],
+        specular_positions[:, receiver, transmitter, :],
+        # time_samples_per_reflect_line=5,
+    )
+
+    export_vtkjs(p, "demosite/src/scenes/gps_and_iridium")
+    p.show()
+
+
+if __name__ == "__main__":
+    plot_gps_pair()
+    plot_gps_with_iridium()

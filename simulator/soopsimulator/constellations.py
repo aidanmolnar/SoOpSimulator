@@ -26,9 +26,9 @@ class OrbitDefinition:
     e: float  # Eccentricity
     a: float  # Semimajor axis (km)
     i: float  # Inclination (deg)
-    RAAN: float  # Right argument of the ascending node (deg)
-    AOP: float  # Argument of periapsis (deg)
-    TA: float  # True anomaly (deg)
+    raan: float  # Right argument of the ascending node (deg)
+    aop: float  # Argument of periapsis (deg)
+    ta: float  # True anomaly (deg)
 
     # Other TLE elements
     bstar: float = 0.0  # drag coefficient (/earth radii)
@@ -37,7 +37,7 @@ class OrbitDefinition:
     # Output in radians
     def mean_anomaly(self) -> float:
         E = 2.0 * np.arctan(
-            np.sqrt((1.0 - self.e) / (1.0 + self.e)) * np.tan(np.deg2rad(self.TA) / 2.0)
+            np.sqrt((1.0 - self.e) / (1.0 + self.e)) * np.tan(np.deg2rad(self.ta) / 2.0)
         )
         return E - self.e * np.sin(E)
 
@@ -87,11 +87,11 @@ class Constellation:
                 0.0,  # ndot: ballistic coefficient (revs/day) (unused)
                 0.0,  # nddot: second derivative of mean motion (revs/day^3) (unused)
                 orbit.e,  # ecco: eccentricity
-                np.deg2rad(orbit.AOP),  # argpo: argument of perigee (radians)
+                np.deg2rad(orbit.aop),  # argpo: argument of perigee (radians)
                 np.deg2rad(orbit.i),  # inclo: inclination (radians)
                 np.deg2rad(orbit.mean_anomaly()),  # mo: mean anomaly (radians)
                 60 * orbit.mean_motion(),  # no_kozai: mean motion (radians/minute)
-                np.deg2rad(orbit.RAAN),  # nodeo: right ascension (radians)
+                np.deg2rad(orbit.raan),  # nodeo: right ascension (radians)
             )
             satellites.append(EarthSatellite.from_satrec(satrec, load.timescale()))
 

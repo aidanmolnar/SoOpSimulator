@@ -70,11 +70,9 @@ def find_specular_points(z1, z2, rad_earth=RAD_EARTH):
     z1 = np.squeeze(z1, axis=-1)
     z2 = np.squeeze(z2, axis=-1)
 
-    # It's possible that some of the specular points found are on the inside
-    #  of the sphere.
-    # Remove them by checking the dot product of N and both z1 and z2 is positive
-    dot_z1 = np.reshape(np.einsum("ijkl,ijkl->ijk", N, z1), (n_t, n_z1, n_z2))
-    dot_z2 = np.reshape(np.einsum("ijkl,ijkl->ijk", N, z2), (n_t, n_z1, n_z2))
+    # Check that the incidence angle is greater than 90 degrees
+    dot_z1 = np.reshape(np.einsum("ijkl,ijkl->ijk", z1 - N, N), (n_t, n_z1, n_z2))
+    dot_z2 = np.reshape(np.einsum("ijkl,ijkl->ijk", z2 - N, N), (n_t, n_z1, n_z2))
 
     invalid = np.logical_or(dot_z1 < 0, dot_z2 < 0)
     invalid = np.stack((invalid, invalid, invalid), axis=-1)

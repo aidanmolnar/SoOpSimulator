@@ -9,10 +9,10 @@ crate-type = ["cdylib"]
 
 [dependencies]
 ndarray = { version = "0.15.6", features = ["rayon"]}
+num = "0.4.0"
 numpy =  { version = "0.17.2"}
 pyo3 = { version = "0.17.1", features = ["extension-module"] }
 rayon = "1.5.3"
-roots = "0.0.7"
 
 [package.metadata.maturin]
 name = "rust_sim_core"

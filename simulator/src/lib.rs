@@ -1,36 +1,13 @@
 use std::ops::{Add, Div, Mul, Sub};
 
-use numpy::ndarray::{s, Array, ArrayD, ArrayViewD, ArrayViewMutD, Axis, Dim};
-use numpy::{IntoPyArray, PyArrayDyn, PyReadonlyArrayDyn};
+use num::complex::Complex;
+use numpy::ndarray::{s, Array, ArrayViewD, Axis, Dim};
+use numpy::{IntoPyArray, PyArrayDyn};
 use pyo3::{pymodule, types::PyModule, PyResult, Python};
 use rayon::prelude::*;
-use roots::find_roots_quartic;
 
 #[pymodule]
 fn rust_sim_core(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
-    // wrapper of `axpy`
-    #[pyfn(m)]
-    #[pyo3(name = "axpy")]
-    fn axpy_py<'py>(
-        py: Python<'py>,
-        a: f64,
-        x: PyReadonlyArrayDyn<f64>,
-        y: PyReadonlyArrayDyn<f64>,
-    ) -> &'py PyArrayDyn<f64> {
-        let x = x.as_array();
-        let y = y.as_array();
-        let z = axpy(a, x, y);
-        z.into_pyarray(py)
-    }
-
-    // wrapper of `mult`
-    #[pyfn(m)]
-    #[pyo3(name = "mult")]
-    fn mult_py(_py: Python<'_>, a: f64, x: &PyArrayDyn<f64>) {
-        let x = unsafe { x.as_array_mut() };
-        mult(a, x);
-    }
-
     #[pyfn(m)]
     #[pyo3(name = "find_specular_points")]
     fn find_specular_points_py<'py>(
@@ -40,22 +17,11 @@ fn rust_sim_core(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     ) -> &'py PyArrayDyn<f64> {
         let receivers = unsafe { receivers.as_array() };
         let transmitters = unsafe { transmitters.as_array() };
-        find_specular_points(&receivers, &transmitters)
-            .into_dyn()
-            .into_pyarray(py)
+        let out = py.allow_threads(|| find_specular_points(&receivers, &transmitters));
+        out.into_dyn().into_pyarray(py)
     }
 
     Ok(())
-}
-
-// example using immutable borrows producing a new array
-fn axpy(a: f64, x: ArrayViewD<'_, f64>, y: ArrayViewD<'_, f64>) -> ArrayD<f64> {
-    a * &x + &y
-}
-
-// example using a mutable borrow to modify an array in-place
-fn mult(a: f64, mut x: ArrayViewMutD<'_, f64>) {
-    x *= a;
 }
 
 fn find_specular_points(
@@ -140,7 +106,7 @@ fn find_specular_points_slice(
     unsafe { speculars.assume_init() }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Vec3 {
     x: f64,
     y: f64,
@@ -213,34 +179,40 @@ fn find_specular_point_single(recv: Vec3, trans: Vec3) -> Vec3 {
 
     let a = 4. * w * (u * w - v * v);
     let b = -4. * (u * w - v * v);
-    let c = a + 2. * v + w - 4. * u * w;
+    let c = u + 2. * v + w - 4. * u * w;
     let d = 2. * (u - v);
     let e = u - 1.;
 
-    let roots = find_roots_quartic(a, b, c, d, e);
+    let roots = quartic_solver(a, b, c, d, e);
 
     let mut q_min = f64::MAX;
-    let mut final_spec = None;
+    let mut final_spec = Vec3 {
+        x: f64::NAN,
+        y: f64::NAN,
+        z: f64::NAN,
+    };
 
-    for x in roots.as_ref() {
-        let y = (-2. * w * x * x + x + 1.) / (2. * v * w + 1.);
+    for y in roots.as_ref() {
+        let x = (-2. * w * y * y + y + 1.) / (2. * v * y + 1.);
 
-        let mut spec = &recv * (*x) + &trans * y;
+        let mut spec = &recv * x + &trans * (*y);
         spec = spec / spec.norm();
 
-        // Check that recv dot spec and spec dot trans are positive.
-        if dot(&spec, &recv) > 0. && dot(&spec, &trans) > 0. {
-            let q = (recv - spec).norm() + (spec - trans).norm();
+        let q = (recv - spec).norm() + (spec - trans).norm();
 
-            // Then check if it has lowest q
-            if q < q_min {
-                q_min = q;
-                final_spec = Some(spec);
-            }
+        // Then check if it has lowest q
+        if q < q_min {
+            q_min = q;
+            final_spec = spec;
         }
     }
 
-    if let Some(final_spec) = final_spec {
+    // Incidence angles
+    //let recv_incidence_angle = compute_angle(recv - final_spec, final_spec);
+    //let trans_incidence_angle = compute_angle(trans - final_spec, final_spec);
+
+    // Check that incidence angle is less than 90 degrees
+    if dot(&(recv - final_spec), &final_spec) > 0. && dot(&(trans - final_spec), &final_spec) > 0. {
         &final_spec * RAD_EARTH
     } else {
         Vec3 {
@@ -249,13 +221,92 @@ fn find_specular_point_single(recv: Vec3, trans: Vec3) -> Vec3 {
             z: f64::NAN,
         }
     }
+
+    // Check that recv dot spec and spec dot trans are positive.
+    // if dot(&final_spec, &recv) > 0. && dot(&final_spec, &trans) > 0. {
+    //
+    // } else {
+    //     Vec3 {
+    //         x: f64::NAN,
+    //         y: f64::NAN,
+    //         z: f64::NAN,
+    //     }
+    // }
+}
+
+fn approx_equal(a: f64, b: f64, dp: u8) -> bool {
+    let p = 10f64.powi(-(dp as i32));
+    (a - b).abs() < p
+}
+
+fn compute_angle(a: Vec3, b: Vec3) -> f64 {
+    let cos = dot(&a, &b) / (a.norm() * b.norm());
+    cos.clamp(-1., 1.).acos()
 }
 
 fn dot(a: &Vec3, b: &Vec3) -> f64 {
     a.x * b.x + a.y * b.y + a.z * b.z
 }
 
-fn find_revisits(spec_0: ArrayViewD<'_, f64>, spec_1: ArrayViewD<'_, f64>) {
+fn quartic_solver(a: f64, b: f64, c: f64, d: f64, e: f64) -> [f64; 4] {
+    let b_2 = b * b;
+    let a_2 = a * a;
+    let alpha = (-3. / 8.) * b_2 / a_2 + c / a;
+    let beta = (1. / 8.) * b_2 * b / (a_2 * a) - b * c / (2. * a_2) + d / a;
+    let gam = (-3. / 256.) * b_2 * b_2 / (a_2 * a_2) + c * b_2 / (16. * a_2 * a)
+        - b * d / (4. * a_2)
+        + e / a;
+
+    if beta == 0.0 {
+        let mut roots = [0.0; 4];
+
+        let inner = Complex {
+            re: alpha * alpha - 4. * gam,
+            im: 0.0,
+        }
+        .sqrt();
+
+        roots[0] = (-b / (4. * a) + ((-alpha + inner) / 2.).sqrt()).re;
+        roots[1] = (-b / (4. * a) + ((-alpha - inner) / 2.).sqrt()).re;
+        roots[2] = (-b / (4. * a) - ((-alpha + inner) / 2.).sqrt()).re;
+        roots[3] = (-b / (4. * a) - ((-alpha - inner) / 2.).sqrt()).re;
+
+        return roots;
+    }
+
+    let p = -(1. / 12.) * alpha * alpha - gam;
+    let q = -(1. / 108.) * alpha * alpha * alpha + alpha * gam / 3. - beta * beta / 8.;
+    let r = -q / 2.
+        + Complex {
+            re: q * q / 4. + p * p * p / 27.,
+            im: 0.0,
+        }
+        .sqrt();
+
+    let u = r.cbrt();
+
+    let y = if u == (Complex { re: 0.0, im: 0.0 }) {
+        Complex {
+            re: -(5. / 6.) * alpha - q.cbrt(),
+            im: 0.,
+        }
+    } else {
+        -(5. / 6.) * alpha + u - p / (3. * u)
+    };
+
+    let w = (alpha + 2. * y).sqrt();
+
+    let mut roots = [0.0; 4];
+
+    roots[0] = (-b / (4. * a) + (-w - (-(3. * alpha + 2. * y - 2. * beta / w)).sqrt()) / 2.).re;
+    roots[1] = (-b / (4. * a) + (w - (-(3. * alpha + 2. * y + 2. * beta / w)).sqrt()) / 2.).re;
+    roots[2] = (-b / (4. * a) + (-w + (-(3. * alpha + 2. * y - 2. * beta / w)).sqrt()) / 2.).re;
+    roots[3] = (-b / (4. * a) + (w + (-(3. * alpha + 2. * y + 2. * beta / w)).sqrt()) / 2.).re;
+
+    roots
+}
+
+/* fn find_revisits(spec_0: ArrayViewD<'_, f64>, spec_1: ArrayViewD<'_, f64>) {
     // TODO:
     //   Iterate along every combination of R and T in spec_0 and spec_1 (flat slices (no t dimension))
     //   Perform plotline / count for each one
@@ -263,3 +314,4 @@ fn find_revisits(spec_0: ArrayViewD<'_, f64>, spec_1: ArrayViewD<'_, f64>) {
     //   Will probably need to use a stream or something
     //   Or maybe unsafe?
 }
+ */

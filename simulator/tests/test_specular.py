@@ -1,8 +1,10 @@
 from simulator.soopsimulator.python_sim_core.specular import (
     solve_quartic,
-    find_specular_points,
+    # find_specular_points,
     RAD_EARTH,
 )
+
+from rust_sim_core import find_specular_points
 
 import numpy as np
 
@@ -150,7 +152,6 @@ def test_7():
     R[0, 0, :] = [10000.0, 100.0, 0.0]
     T[0, 0, :] = [-10000.0, 100.0, 0.0]
 
-    # Used 2d Solidworks CAD sketch to get S_expect
     S = find_specular_points(R, T)
 
     S_expect = np.array([np.nan, np.nan, np.nan])

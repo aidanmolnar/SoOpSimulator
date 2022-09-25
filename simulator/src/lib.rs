@@ -1,10 +1,23 @@
-use std::ops::{Add, Div, Mul, Sub};
+mod specular;
+mod vec3;
 
-use num::complex::Complex;
+use std::mem::MaybeUninit;
+use std::ops::Add;
+
+use ndarray::ArrayViewMut;
+use specular::find_specular_points;
+use vec3::Vec3;
+
 use numpy::ndarray::{s, Array, ArrayViewD, Axis, Dim};
 use numpy::{IntoPyArray, PyArrayDyn};
-use pyo3::{pymodule, types::PyModule, PyResult, Python};
+use pyo3::{pyclass, pymodule, types::PyModule, PyResult, Python};
 use rayon::prelude::*;
+
+const SQRT_TAU: f64 = 2.5066282746310002;
+use std::f64::consts::FRAC_2_SQRT_PI;
+
+pub const RAD_EARTH: f64 = 6371.; //Approximate radius of earth (km)
+const PROJECTION_LENGTH: f64 = RAD_EARTH * SQRT_TAU;
 
 #[pymodule]
 fn rust_sim_core(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
@@ -17,296 +30,95 @@ fn rust_sim_core(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     ) -> &'py PyArrayDyn<f64> {
         let receivers = unsafe { receivers.as_array() };
         let transmitters = unsafe { transmitters.as_array() };
-        let out = py.allow_threads(|| find_specular_points(&receivers, &transmitters));
+        let out = py.allow_threads(|| find_specular_points(receivers, transmitters));
         out.into_dyn().into_pyarray(py)
+    }
+
+    #[pyfn(m)]
+    #[pyo3(name = "find_revisits")]
+    fn find_revisits_py<'py>(
+        py: Python<'py>,
+        speculars: &PyArrayDyn<f64>,
+    ) -> (&'py PyArrayDyn<u32>, &'py PyArrayDyn<u32>) {
+        let speculars = unsafe { speculars.as_array() };
+        let out = py.allow_threads(|| find_revisits(speculars));
+        (
+            out.0.into_dyn().into_pyarray(py),
+            out.1.into_dyn().into_pyarray(py),
+        )
     }
 
     Ok(())
 }
 
-fn find_specular_points(
-    receivers: &ArrayViewD<f64>,
-    transmitters: &ArrayViewD<f64>,
-) -> Array<f64, Dim<[usize; 4]>> {
-    let output_shape = [
-        receivers.shape()[0],
-        receivers.shape()[1],
-        transmitters.shape()[1],
-        3,
-    ];
+// TODO: we need array shape or it needs to be passed
+// Inputs:
+//   Speculars array shape [num_times, num_receivers, num_transmitters, 3]
+// Outputs:
+//   Number of revisits at each pixel (north, south)
+fn find_revisits(
+    speculars: ArrayViewD<'_, f64>,
+) -> (Array<u32, Dim<[usize; 2]>>, Array<u32, Dim<[usize; 2]>>) {
+    let output_shape = [1000, 1000];
 
-    let mut specular = Array::uninit(output_shape);
+    // Initialize counts
+    let mut count_s = Array::zeros(output_shape);
+    let mut count_n = Array::zeros(output_shape);
 
-    for (i, (recv_slice, tran_slice)) in receivers
+    // Iterate over every step of spec_0 and spec_1
+
+    for (spec_0, spec_1) in speculars
         .axis_iter(Axis(0))
-        .zip(transmitters.axis_iter(Axis(0)))
-        .enumerate()
+        .zip(speculars.axis_iter(Axis(0)).skip(1))
     {
-        let specular_slice = find_specular_points_slice(recv_slice, tran_slice);
-        specular_slice
-            .slice(s![.., .., ..])
-            .assign_to(specular.slice_mut(s![i, .., .., ..]))
+        find_revisits_slice(spec_0, spec_1, &mut count_s, &mut count_n)
     }
 
-    // TODO:
-    //   Validate sizes?
-    //   Iterate along time axis
-    //   Parallel iterate over R and T broadcast zipped with mutable slice into output array
-    //   Then convert calc specular point from python, use real quartic solver
-    unsafe { specular.assume_init() }
+    (count_s, count_n)
 }
 
-fn find_specular_points_slice(
-    receivers: ArrayViewD<f64>,
-    transmitters: ArrayViewD<f64>,
-) -> Array<f64, Dim<[usize; 3]>> {
-    let output_shape = [receivers.shape()[0], transmitters.shape()[0], 3];
-    let iter_shape = [receivers.shape()[0] * transmitters.shape()[0], 3];
+// Stores them in count_n and count_s
+// Inputs:
+//   Speculars_0 array shape [num_receivers, num_transmitters, 3]
+//   Speculars_1 array shape [num_receivers, num_transmitters, 3]
+fn find_revisits_slice(
+    speculars_0: ArrayViewD<'_, f64>,
+    speculars_1: ArrayViewD<'_, f64>,
+    count_s: &mut Array<u32, Dim<[usize; 2]>>,
+    count_n: &mut Array<u32, Dim<[usize; 2]>>,
+) {
+    let pixels_per_side = count_s.shape()[0];
+    let iter_shape = [speculars_0.shape()[0] * speculars_0.shape()[1], 3];
 
-    let mut speculars = Array::uninit(output_shape);
+    let spec_0_iter_array = speculars_0.into_shape(iter_shape).unwrap();
+    let spec_1_iter_array = speculars_1.into_shape(iter_shape).unwrap();
 
-    let recv_iter_array = receivers.insert_axis(Axis(1));
-    let recv_iter_array = recv_iter_array.broadcast(output_shape).unwrap();
-    let recv_iter_array = recv_iter_array.to_shape(iter_shape).unwrap();
+    let mut plot_south = |x: usize, y: usize| count_s[[x, y]] += 1;
+    let mut plot_north = |x: usize, y: usize| count_n[[x, y]] += 1;
 
-    let trans_iter_array = transmitters.insert_axis(Axis(0));
-    let trans_iter_array = trans_iter_array.broadcast(output_shape).unwrap();
-    let trans_iter_array = trans_iter_array.to_shape(iter_shape).unwrap();
-
-    let mut spec_iter_array = speculars
-        .slice_mut(s![.., .., ..])
-        .into_shape(iter_shape)
-        .unwrap();
-
-    recv_iter_array
+    // Iterate over each segment
+    // TODO: make parallel
+    spec_0_iter_array
         .axis_iter(Axis(0))
-        .into_par_iter()
-        .zip(trans_iter_array.axis_iter(Axis(0)).into_par_iter())
-        .zip(spec_iter_array.axis_iter_mut(Axis(0)).into_par_iter())
-        .for_each(|((rec, trans), mut spec)| {
-            // TODO: Calculate specular points
-            let calc_spec = find_specular_point_single(
+        .zip(spec_1_iter_array.axis_iter(Axis(0)))
+        .for_each(|(spec_0, spec_1)| {
+            plot_spec_trail(
                 Vec3 {
-                    x: rec[0],
-                    y: rec[1],
-                    z: rec[2],
+                    x: spec_0[0],
+                    y: spec_0[1],
+                    z: spec_0[2],
                 },
                 Vec3 {
-                    x: trans[0],
-                    y: trans[1],
-                    z: trans[2],
+                    x: spec_1[0],
+                    y: spec_1[1],
+                    z: spec_1[2],
                 },
+                &mut plot_south,
+                &mut plot_north,
+                pixels_per_side,
             );
-
-            spec[0].write(calc_spec.x);
-            spec[1].write(calc_spec.y);
-            spec[2].write(calc_spec.z);
         });
 
-    unsafe { speculars.assume_init() }
-}
-
-#[derive(Clone, Copy, Debug)]
-struct Vec3 {
-    x: f64,
-    y: f64,
-    z: f64,
-}
-
-impl Vec3 {
-    fn norm(self) -> f64 {
-        f64::sqrt(dot(&self, &self))
-    }
-}
-
-impl Div<f64> for Vec3 {
-    type Output = Vec3;
-
-    fn div(self, rhs: f64) -> Self::Output {
-        Vec3 {
-            x: self.x / rhs,
-            y: self.y / rhs,
-            z: self.z / rhs,
-        }
-    }
-}
-
-impl Mul<f64> for &Vec3 {
-    type Output = Vec3;
-
-    fn mul(self, rhs: f64) -> Self::Output {
-        Vec3 {
-            x: self.x * rhs,
-            y: self.y * rhs,
-            z: self.z * rhs,
-        }
-    }
-}
-
-impl Add<Vec3> for Vec3 {
-    type Output = Vec3;
-
-    fn add(self, rhs: Vec3) -> Self::Output {
-        Vec3 {
-            x: self.x + rhs.x,
-            y: self.y + rhs.y,
-            z: self.z + rhs.z,
-        }
-    }
-}
-
-impl Sub<Vec3> for Vec3 {
-    type Output = Vec3;
-
-    fn sub(self, rhs: Vec3) -> Self::Output {
-        Vec3 {
-            x: self.x - rhs.x,
-            y: self.y - rhs.y,
-            z: self.z - rhs.z,
-        }
-    }
-}
-
-pub const RAD_EARTH: f64 = 6371.; //Approximate radius of earth (km)
-
-fn find_specular_point_single(recv: Vec3, trans: Vec3) -> Vec3 {
-    let recv = recv / RAD_EARTH;
-    let trans = trans / RAD_EARTH;
-
-    let u = dot(&recv, &recv);
-    let v = dot(&recv, &trans);
-    let w = dot(&trans, &trans);
-
-    let a = 4. * w * (u * w - v * v);
-    let b = -4. * (u * w - v * v);
-    let c = u + 2. * v + w - 4. * u * w;
-    let d = 2. * (u - v);
-    let e = u - 1.;
-
-    let roots = quartic_solver(a, b, c, d, e);
-
-    let mut q_min = f64::MAX;
-    let mut final_spec = Vec3 {
-        x: f64::NAN,
-        y: f64::NAN,
-        z: f64::NAN,
-    };
-
-    for y in roots.as_ref() {
-        let x = (-2. * w * y * y + y + 1.) / (2. * v * y + 1.);
-
-        let mut spec = &recv * x + &trans * (*y);
-        spec = spec / spec.norm();
-
-        let q = (recv - spec).norm() + (spec - trans).norm();
-
-        // Then check if it has lowest q
-        if q < q_min {
-            q_min = q;
-            final_spec = spec;
-        }
-    }
-
-    // Incidence angles
-    //let recv_incidence_angle = compute_angle(recv - final_spec, final_spec);
-    //let trans_incidence_angle = compute_angle(trans - final_spec, final_spec);
-
-    // Check that incidence angle is less than 90 degrees
-    if dot(&(recv - final_spec), &final_spec) > 0. && dot(&(trans - final_spec), &final_spec) > 0. {
-        &final_spec * RAD_EARTH
-    } else {
-        Vec3 {
-            x: f64::NAN,
-            y: f64::NAN,
-            z: f64::NAN,
-        }
-    }
-
-    // Check that recv dot spec and spec dot trans are positive.
-    // if dot(&final_spec, &recv) > 0. && dot(&final_spec, &trans) > 0. {
-    //
-    // } else {
-    //     Vec3 {
-    //         x: f64::NAN,
-    //         y: f64::NAN,
-    //         z: f64::NAN,
-    //     }
-    // }
-}
-
-fn approx_equal(a: f64, b: f64, dp: u8) -> bool {
-    let p = 10f64.powi(-(dp as i32));
-    (a - b).abs() < p
-}
-
-fn compute_angle(a: Vec3, b: Vec3) -> f64 {
-    let cos = dot(&a, &b) / (a.norm() * b.norm());
-    cos.clamp(-1., 1.).acos()
-}
-
-fn dot(a: &Vec3, b: &Vec3) -> f64 {
-    a.x * b.x + a.y * b.y + a.z * b.z
-}
-
-fn quartic_solver(a: f64, b: f64, c: f64, d: f64, e: f64) -> [f64; 4] {
-    let b_2 = b * b;
-    let a_2 = a * a;
-    let alpha = (-3. / 8.) * b_2 / a_2 + c / a;
-    let beta = (1. / 8.) * b_2 * b / (a_2 * a) - b * c / (2. * a_2) + d / a;
-    let gam = (-3. / 256.) * b_2 * b_2 / (a_2 * a_2) + c * b_2 / (16. * a_2 * a)
-        - b * d / (4. * a_2)
-        + e / a;
-
-    if beta == 0.0 {
-        let mut roots = [0.0; 4];
-
-        let inner = Complex {
-            re: alpha * alpha - 4. * gam,
-            im: 0.0,
-        }
-        .sqrt();
-
-        roots[0] = (-b / (4. * a) + ((-alpha + inner) / 2.).sqrt()).re;
-        roots[1] = (-b / (4. * a) + ((-alpha - inner) / 2.).sqrt()).re;
-        roots[2] = (-b / (4. * a) - ((-alpha + inner) / 2.).sqrt()).re;
-        roots[3] = (-b / (4. * a) - ((-alpha - inner) / 2.).sqrt()).re;
-
-        return roots;
-    }
-
-    let p = -(1. / 12.) * alpha * alpha - gam;
-    let q = -(1. / 108.) * alpha * alpha * alpha + alpha * gam / 3. - beta * beta / 8.;
-    let r = -q / 2.
-        + Complex {
-            re: q * q / 4. + p * p * p / 27.,
-            im: 0.0,
-        }
-        .sqrt();
-
-    let u = r.cbrt();
-
-    let y = if u == (Complex { re: 0.0, im: 0.0 }) {
-        Complex {
-            re: -(5. / 6.) * alpha - q.cbrt(),
-            im: 0.,
-        }
-    } else {
-        -(5. / 6.) * alpha + u - p / (3. * u)
-    };
-
-    let w = (alpha + 2. * y).sqrt();
-
-    let mut roots = [0.0; 4];
-
-    roots[0] = (-b / (4. * a) + (-w - (-(3. * alpha + 2. * y - 2. * beta / w)).sqrt()) / 2.).re;
-    roots[1] = (-b / (4. * a) + (w - (-(3. * alpha + 2. * y + 2. * beta / w)).sqrt()) / 2.).re;
-    roots[2] = (-b / (4. * a) + (-w + (-(3. * alpha + 2. * y - 2. * beta / w)).sqrt()) / 2.).re;
-    roots[3] = (-b / (4. * a) + (w + (-(3. * alpha + 2. * y + 2. * beta / w)).sqrt()) / 2.).re;
-
-    roots
-}
-
-/* fn find_revisits(spec_0: ArrayViewD<'_, f64>, spec_1: ArrayViewD<'_, f64>) {
     // TODO:
     //   Iterate along every combination of R and T in spec_0 and spec_1 (flat slices (no t dimension))
     //   Perform plotline / count for each one
@@ -314,4 +126,188 @@ fn quartic_solver(a: f64, b: f64, c: f64, d: f64, e: f64) -> [f64; 4] {
     //   Will probably need to use a stream or something
     //   Or maybe unsafe?
 }
- */
+
+fn sphere_to_projection(point: Vec3) -> (f64, f64) {
+    let mult = if point.z > 0.0 {
+        (2.0 * RAD_EARTH * (RAD_EARTH - point.z)).sqrt()
+    } else {
+        (2.0 * RAD_EARTH * (RAD_EARTH + point.z)).sqrt()
+    };
+
+    if point.y.abs() <= point.x.abs() {
+        let a = mult * point.x.signum() / FRAC_2_SQRT_PI;
+        let b = mult * point.x.signum() * (FRAC_2_SQRT_PI) * (point.y / point.x).atan();
+        (a, b)
+    } else {
+        let a = mult * point.y.signum() * (FRAC_2_SQRT_PI) * (point.x / point.y).atan();
+        let b = mult * point.y.signum() / FRAC_2_SQRT_PI;
+        (a, b)
+    }
+}
+
+fn plot_spec_trail<N, S>(
+    spec_0: Vec3,
+    spec_1: Vec3,
+    plot_south: N,
+    plot_north: S,
+    pixels_per_side: usize,
+) where
+    N: FnMut(usize, usize),
+    S: FnMut(usize, usize),
+{
+    // Don't render the line if one of the coordinates is not valid
+    if spec_0.x.is_nan() || spec_1.x.is_nan() {
+        return;
+    }
+
+    //# Find the fraction of the way through the line when it crosses hemispheres
+    let t = if spec_0.z == spec_1.z {
+        0.5
+    } else {
+        //From linear interpolation;
+        // z = z0 + t*(z1-z0) = 0
+        spec_0.z / (spec_0.z - spec_1.z)
+    };
+
+    // Projection coordinates
+    let (a0, b0) = sphere_to_projection(spec_0);
+    let (a1, b1) = sphere_to_projection(spec_1);
+
+    // Check if line crosses hemisphers
+    if 0.0 < t && t < 1.0 {
+        // Interpolated point where line crosses hemispheres
+        let m = spec_0 + &(spec_1 - spec_0) * t;
+
+        // Projection of cross point
+        let (am, bm) = sphere_to_projection(m);
+
+        if spec_0.z < 0.0 {
+            plot_line(a0, b0, am, bm, pixels_per_side, plot_south);
+            plot_line(am, bm, a1, b1, pixels_per_side, plot_north);
+        } else {
+            plot_line(a0, b0, am, bm, pixels_per_side, plot_north);
+            plot_line(am, bm, a1, b1, pixels_per_side, plot_south);
+        }
+    } else {
+        // Line is exclusively in one hemisphere
+        if spec_0.z < 0.0 {
+            plot_line(a0, b0, a1, b1, pixels_per_side, plot_south);
+        } else {
+            plot_line(a0, b0, a1, b1, pixels_per_side, plot_north);
+        }
+    }
+}
+
+// Converts a projected point to a pixel location
+//   Changing origin from middle to bottom left
+//   Scaling by PROJECTION_LENGTH / pixels_per_side
+fn map_to_grid(coord: f64, pixels_per_side: usize) -> i32 {
+    ((coord / PROJECTION_LENGTH + 0.5) * pixels_per_side as f64) as i32
+}
+
+fn plot_line<F>(x0: f64, y0: f64, x1: f64, y1: f64, pixels_per_side: usize, mut plot: F)
+where
+    F: FnMut(usize, usize),
+{
+    // Rescale coordinates to grid used for line algorithm
+    let x0 = (x0 / PROJECTION_LENGTH + 0.5) * pixels_per_side as f64;
+    let y0 = (y0 / PROJECTION_LENGTH + 0.5) * pixels_per_side as f64;
+    let x1 = (x1 / PROJECTION_LENGTH + 0.5) * pixels_per_side as f64;
+    let y1 = (y1 / PROJECTION_LENGTH + 0.5) * pixels_per_side as f64;
+
+    let dx = (x1 - x0).abs();
+    let dy = (y1 - y0).abs();
+
+    let mut x = x0.floor() as isize;
+    let mut y = y0.floor() as isize;
+
+    let mut n = 1;
+    let mut error = 0.0;
+
+    let x_inc: isize = if dx == 0.0 {
+        error = f64::INFINITY;
+        0
+    } else if x1 > x0 {
+        n += x1.floor() as isize - x;
+        error += (x0.floor() + 1.0 - x0) * dy;
+        1
+    } else {
+        n += x - x1.floor() as isize;
+        error += (x0 - x0.floor()) * dy;
+        -1
+    };
+
+    let y_inc: isize = if dy == 0.0 {
+        error = f64::NEG_INFINITY;
+        0
+    } else if y1 > y0 {
+        n += y1.floor() as isize - y;
+        error -= (y0.floor() + 1.0 - y0) * dx;
+        1
+    } else {
+        n += y - y1.floor() as isize;
+        error -= (y0 - y0.floor()) * dx;
+        -1
+    };
+
+    // Skips end point so interpolated segments don't double count
+    while n > 1 {
+        if 0 <= x && x < pixels_per_side as isize && 0 <= y && y < pixels_per_side as isize {
+            plot(x as usize, y as usize);
+        }
+
+        if error > 0.0 {
+            y += y_inc;
+            error -= dx;
+        } else {
+            x += x_inc;
+            error += dy;
+        }
+
+        n -= 1;
+    }
+}
+
+// Bresenham's Line Drawing Algorithm
+//   Based on: https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
+fn plot_line_wiki<F>(mut x0: i32, mut y0: i32, x1: i32, y1: i32, mut plot: F)
+where
+    F: FnMut(usize, usize),
+{
+    let dx = x0.abs_diff(x0) as i32;
+    let sx = if x0 < x1 { 1 } else { -1 };
+    let dy = -(y0.abs_diff(y0) as i32);
+    let sy = if y0 < y1 { 1 } else { -1 };
+    let mut er = dx + dy;
+    let mut first = true;
+
+    loop {
+        // Skip plotting the first pixel, so segments don't double count it
+        if !first {
+            plot(x0 as usize, y0 as usize);
+        } else {
+            first = false;
+        }
+
+        if x0 == x1 && y0 == y1 {
+            break;
+        }
+        let er2 = 2 * er;
+        if er2 >= dy {
+            if x0 == x1 {
+                break;
+            } else {
+                er += dy;
+                x0 += sx;
+            }
+        }
+        if er2 <= dx {
+            if y0 == y1 {
+                break;
+            } else {
+                er += dx;
+                y0 += sy;
+            }
+        }
+    }
+}

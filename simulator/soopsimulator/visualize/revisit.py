@@ -3,15 +3,15 @@ from simulator.soopsimulator.constellations import (
     ConstellationCollection,
     PropagationConfig,
 )
-from simulator.soopsimulator.python_sim_core.specular import find_specular_points
+
 from simulator.soopsimulator.python_sim_core.revisit import (
-    setup_count,
     count_on_sphere,
     projection_to_sphere,
     PROJECTION_LENGTH,
 )
 
 from specular import plot_transmitter_receiver_pair
+from rust_sim_core import find_revisits, find_specular_points
 
 import numpy as np
 import pyvista as pv
@@ -41,41 +41,82 @@ def plot_coverage_3d_hemi(
     plotter.add_mesh(grid, style="surface", smooth_shading=True)
 
 
-constellations = [Constellation.from_tle("data/TLE/gps.txt", None)]
-collections = ConstellationCollection(constellations)
+def plot_gps_pair():
+    constellations = [Constellation.from_tle("data/TLE/gps.txt", None)]
+    collections = ConstellationCollection(constellations)
 
-positions = collections.propagate_orbits(PropagationConfig(t_step=0.005, t_range=1.0))
+    positions = collections.propagate_orbits(
+        PropagationConfig(t_step=0.001, t_range=1.0)
+    )
 
-receiver = 30
-transmitter = 12
+    receiver = 30
+    transmitter = 12
 
-specular = find_specular_points(
-    positions[:, receiver : receiver + 1, :],  # noqa
-    positions[:, transmitter : transmitter + 1, :],  # noqa
-)
+    speculars = find_specular_points(
+        positions[:, receiver : receiver + 1, :],  # noqa
+        positions[:, transmitter : transmitter + 1, :],  # noqa
+    )
 
-count_s, count_n = setup_count(10.0)
-count_on_sphere(specular, count_s, count_n)
+    # count_s, count_n = setup_count(10.0)
+    count_s, count_n = find_revisits(speculars)
 
-p = pv.Plotter()
+    p = pv.Plotter()
 
-receiver_positions = positions[:, receiver, :]
-transmitter_positions = positions[:, transmitter, :]
-specular_positions = np.squeeze(specular)
-plot_transmitter_receiver_pair(
-    p,
-    receiver_positions,
-    transmitter_positions,
-    specular_positions,
-    plot_specular_trail=False,
-    plot_sphere=False,
-    reflect_line_radius=5.0,
-)
+    receiver_positions = positions[:, receiver, :]
+    transmitter_positions = positions[:, transmitter, :]
+    specular_positions = np.squeeze(speculars)
+    plot_transmitter_receiver_pair(
+        p,
+        receiver_positions,
+        transmitter_positions,
+        specular_positions,
+        plot_specular_trail=False,
+        plot_sphere=False,
+        reflect_line_radius=25.0,
+    )
 
-plot_coverage_3d_hemi(p, count_s, north=False)
-plot_coverage_3d_hemi(p, count_n)
-p.show()
+    plot_coverage_3d_hemi(p, count_s, north=False)
+    plot_coverage_3d_hemi(p, count_n)
+    p.show()
+
+
+def plot_iridium_gps():
+    prop_config = PropagationConfig(t_step=0.001, t_range=1.0)
+
+    receiver_constellations = [Constellation.from_tle("data/TLE/gps.txt", None)]
+    receiver_collections = ConstellationCollection(receiver_constellations)
+    transmitter_positions = receiver_collections.propagate_orbits(prop_config)
+
+    receiver_constellations = [Constellation.from_tle("data/TLE/iridium.txt", None)]
+    receiver_collections = ConstellationCollection(receiver_constellations)
+    receiver_positions = receiver_collections.propagate_orbits(prop_config)
+
+    speculars = find_specular_points(
+        transmitter_positions,  # noqa
+        receiver_positions,  # noqa
+    )
+
+    import time
+
+    start = time.time()
+    count_s = np.zeros((1000, 1000), dtype=np.uint32)
+    count_n = np.zeros((1000, 1000), dtype=np.uint32)
+    count_on_sphere(speculars, count_s, count_n)
+    print("Numba: %.2f (s)" % (time.time() - start))
+
+    start = time.time()
+    count_s, count_n = find_revisits(speculars)
+    print("Rust: %.2f (s)" % (time.time() - start))
+
+    p = pv.Plotter()
+
+    plot_coverage_3d_hemi(p, count_s, north=False)
+    plot_coverage_3d_hemi(p, count_n)
+    p.show()
+
 
 # TODO: Compare speed of projection as numpy function vs numba function with loop
 # TODO: Calculate actual revisit time / medians
 # TODO: RUST
+if __name__ == "__main__":
+    plot_iridium_gps()

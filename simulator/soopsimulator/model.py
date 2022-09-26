@@ -14,6 +14,7 @@ from python_sim_core.mask_ocean import mask_ocean
 from simulator.soopsimulator.constellations import NadirPointing
 from visualize.revisit import plot_coverage_3d_hemi, count_at_latitude
 from visualize.specular import plot_transmitter_receiver_pair
+from visualize.export_vtkjs import export_vtkjs
 
 import pyvista as pv
 
@@ -100,7 +101,7 @@ class SoOpModel:
             self.specular_positions, grid_size
         )
 
-    def plot_revisit_frequency_3d(self, cmap="magma", clim=None):
+    def plot_revisit_frequency_3d(self, cmap="magma", clim=None, export=None):
         if self.count_south is None or self.count_north is None:
             raise Exception(
                 "Must calculate revisit counts before plotting revisit frequency"
@@ -120,6 +121,10 @@ class SoOpModel:
             cmap=cmap,
             clim=clim,
         )
+
+        if export is not None:
+            export_vtkjs(p, export)
+
         p.show()
 
     def plot_transmitter_receiver_pair(
@@ -129,6 +134,8 @@ class SoOpModel:
         time_samples_per_reflect_line=1,
         plot_sphere=True,
         plot_specular_trail=True,
+        export=None,
+        cmap="rainbow",
     ):
         p = pv.Plotter()
         plot_transmitter_receiver_pair(
@@ -140,7 +147,11 @@ class SoOpModel:
             plot_specular_trail=plot_specular_trail,
             time_samples_per_reflect_line=time_samples_per_reflect_line,
             time=self.propagation_config.t_range,
+            cmap=cmap,
         )
+        if export is not None:
+            export_vtkjs(p, export)
+
         p.show()
 
     def mask_oceans(self):

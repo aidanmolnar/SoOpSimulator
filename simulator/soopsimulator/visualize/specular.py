@@ -45,6 +45,7 @@ def plot_transmitter_receiver_pair(
     plot_reflect_lines=True,
     reflect_line_radius=50.0,
     time=1.0,
+    cmap=None,
 ):
     if plot_reflect_lines:
         view_points = np.stack(
@@ -81,8 +82,8 @@ def plot_transmitter_receiver_pair(
     if plot_reflect_lines:
         mb.append(reflect_lines.tube(radius=reflect_line_radius))
 
-    plotter.add_mesh(mb, smooth_shading=True, opacity=1.0)
-    # plotter.set_background("black")
+    plotter.add_mesh(mb, smooth_shading=True, opacity=1.0, cmap=cmap)
+    plotter.set_background("black")
 
 
 def plot_gps_pair():

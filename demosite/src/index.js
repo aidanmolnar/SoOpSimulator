@@ -92,6 +92,15 @@ if (myContainer) {
     rootBody.style.padding = '0';
 }
 
-const path = require("./scenes/gps.vtkjs");
+const path0 = require("./scenes/gps_pair.vtkjs");
+const path1 = require("./scenes/galileo_with_iridium.vtkjs");
 
-load(myContainer, path);
+
+const scene = document.currentScript.getAttribute("scene");
+if (scene == "0") {
+    load(myContainer, path0);
+} else if (scene == "1") {
+    load(myContainer, path1);
+}
+
+

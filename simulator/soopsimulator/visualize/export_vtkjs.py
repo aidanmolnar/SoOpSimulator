@@ -1,7 +1,6 @@
 # Slightly modified version of pyvista export_vtkjs that includes normal data in dump
 # https://github.com/pyvista/pyvista/blob/main/pyvista/plotting/export_vtkjs.py
 
-
 """Export a rendering window to a VTKjs file.
 This module holds a set of tools for exporting a VTK rendering window
 to a VTKjs file that can be viewed in a web browser.

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 # What angle constraints to evaluate
 @dataclass
-class AngleConstraintsSettings:
+class AngleConstraintSettings:
     direct_receiver: bool = True
     direct_transmitter: bool = True
     indirect_receiver: bool = True
@@ -12,7 +12,6 @@ class AngleConstraintsSettings:
     incidence: bool = True
 
 
-# TODO: Does this need to be a class?
 class AngleConstraintCalculator:
     # receiver_posiitions should be array with shape (times, receivers, 3)
     # transmitter_posiitions should be array with shape (times, transmitters, 3)
@@ -27,7 +26,7 @@ class AngleConstraintCalculator:
         transmitter_nadir_cone_angle: np.ndarray,
         transmitter_zenith_cone_angle: np.ndarray,
         max_incidence_angle: float,
-        settings: AngleConstraintsSettings,
+        settings: AngleConstraintSettings,
     ):
         # Take positions as references
         self.R = receiver_positions[...]
@@ -35,12 +34,6 @@ class AngleConstraintCalculator:
         self.S = specular_positions[...]
 
         self.validate_position_dimensions()
-
-        self.R = np.expand_dims(self.R, axis=2)
-        self.T = np.expand_dims(self.T, axis=1)
-        # R is array of receiver    positions with shape (time, num recv, 1,         3)
-        # T is array of transmitter positions with shape (time, 1,        num trans, 3)
-        # S is array of receiver    positions with shape (time, num recv, num trans, 3)
 
         # Convert angles to degrees
         self.max_incidence_angle = np.deg2rad(max_incidence_angle)
@@ -50,6 +43,12 @@ class AngleConstraintCalculator:
         self.transmitter_zenith_cone_angle = np.deg2rad(transmitter_zenith_cone_angle)
 
         self.validate_cone_angle_dimensions()
+
+        self.R = np.expand_dims(self.R, axis=2)
+        self.T = np.expand_dims(self.T, axis=1)
+        # R is array of receiver    positions with shape (time, num recv, 1,         3)
+        # T is array of transmitter positions with shape (time, 1,        num trans, 3)
+        # S is array of receiver    positions with shape (time, num recv, num trans, 3)
 
         # Reshape cone angles
         self.receiver_nadir_cone_angle = self.receiver_nadir_cone_angle.reshape(
@@ -95,55 +94,62 @@ class AngleConstraintCalculator:
         )
         assert len(self.transmitter_nadir_cone_angle.shape) == 0 or (
             len(self.transmitter_nadir_cone_angle.shape) == 1
-            and self.transmitter_nadir_cone_angle.shape[0] == self.R.shape[1]
+            and self.transmitter_nadir_cone_angle.shape[0] == self.T.shape[1]
         )
         assert len(self.transmitter_zenith_cone_angle.shape) == 0 or (
             len(self.transmitter_zenith_cone_angle.shape) == 1
-            and self.transmitter_zenith_cone_angle.shape[0] == self.R.shape[1]
+            and self.transmitter_zenith_cone_angle.shape[0] == self.T.shape[1]
         )
 
     def filter_specular_points(self):
-        self.constraints = {}
-        # TODO: Don't need to store, could just bitwise and with valid immediately
+        valid = np.ones(self.S.shape, dtype=bool)
 
         # For all computed angles:
         #  0 is nadir, pi is zenith
 
         if self.settings.direct_receiver:
-            self.constraints["direct_receiver"] = check_antenna_angle(
-                compute_angle(-(self.T - self.R), self.R),
-                self.receiver_nadir_cone_angle,
-                self.receiver_zenith_cone_angle,
+            valid = np.bitwise_and(
+                valid,
+                check_antenna_angle(
+                    compute_angle(-(self.T - self.R), self.R),
+                    self.receiver_nadir_cone_angle,
+                    self.receiver_zenith_cone_angle,
+                ),
             )
 
         if self.settings.direct_transmitter:
-            self.constraints["direct_transmitter"] = check_antenna_angle(
-                compute_angle(self.T - self.R, self.T),
-                self.transmitter_nadir_cone_angle,
-                self.transmitter_zenith_cone_angle,
+            valid = np.bitwise_and(
+                valid,
+                check_antenna_angle(
+                    compute_angle(self.T - self.R, self.T),
+                    self.transmitter_nadir_cone_angle,
+                    self.transmitter_zenith_cone_angle,
+                ),
             )
 
         if self.settings.indirect_receiver:
-            self.constraints["indirect_receiver"] = check_antenna_angle(
-                compute_angle(self.R - self.S, self.R),
-                self.receiver_nadir_cone_angle,
-                self.receiver_zenith_cone_angle,
+            valid = np.bitwise_and(
+                valid,
+                check_antenna_angle(
+                    compute_angle(self.R - self.S, self.R),
+                    self.receiver_nadir_cone_angle,
+                    self.receiver_zenith_cone_angle,
+                ),
             )
 
         if self.settings.indirect_transmitter:
-            self.constraints["indirect_transmitter"] = check_antenna_angle(
-                compute_angle(self.T - self.S, self.T),
-                self.transmitter_nadir_cone_angle,
-                self.transmitter_zenith_cone_angle,
+            valid = np.bitwise_and(
+                valid,
+                check_antenna_angle(
+                    compute_angle(self.T - self.S, self.T),
+                    self.transmitter_nadir_cone_angle,
+                    self.transmitter_zenith_cone_angle,
+                ),
             )
 
         if self.settings.incidence:
             angle = compute_angle(self.R - self.S, self.S)
-            self.constraints["incidence"] = angle < self.max_incidence_angle
-
-        valid = np.ones(self.S.shape, dtype=bool)
-        for key, constraint in self.constraints.items():
-            valid = np.bitwise_and(valid, constraint)
+            valid = np.bitwise_and(valid, angle < self.max_incidence_angle)
 
         self.S[~valid] = np.nan
 

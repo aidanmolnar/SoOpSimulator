@@ -16,9 +16,9 @@ def test_1():
         e=0.0002204,
         a=6794.0,
         i=51.6425,
-        RAAN=257.3620,
-        AOP=231.2948,
-        TA=20.0,
+        raan=257.3620,
+        aop=231.2948,
+        ta=20.0,
     )
 
     # Test values from poliastro
@@ -52,13 +52,13 @@ def test_2():
 # Check that output positions are not NaN for reasonable orbit (ISS)
 def test_3():
     orbits1 = [
-        OrbitDefinition(e=0.00, a=6731, i=0.0, RAAN=0.0, AOP=0, TA=0),
-        OrbitDefinition(e=0.01, a=6731, i=0.0, RAAN=0.0, AOP=0, TA=0),
+        OrbitDefinition(e=0.00, a=6731, i=0.0, raan=0.0, aop=0, ta=0),
+        OrbitDefinition(e=0.01, a=6731, i=0.0, raan=0.0, aop=0, ta=0),
     ]
     orbits2 = [
-        OrbitDefinition(e=0.02, a=6731, i=0.0, RAAN=0.0, AOP=0, TA=0),
-        OrbitDefinition(e=0.03, a=6731, i=0.0, RAAN=0.0, AOP=0, TA=0),
-        OrbitDefinition(e=0.04, a=6731, i=0.0, RAAN=0.0, AOP=0, TA=0),
+        OrbitDefinition(e=0.02, a=6731, i=0.0, raan=0.0, aop=0, ta=0),
+        OrbitDefinition(e=0.03, a=6731, i=0.0, raan=0.0, aop=0, ta=0),
+        OrbitDefinition(e=0.04, a=6731, i=0.0, raan=0.0, aop=0, ta=0),
     ]
 
     collection = ConstellationCollection(
@@ -106,7 +106,7 @@ def test_5():
     a = 10000
 
     orbits = [
-        OrbitDefinition(e=0.00, a=a, i=0.0, RAAN=0.0, AOP=0, TA=0),
+        OrbitDefinition(e=0.00, a=a, i=0.0, raan=0.0, aop=0, ta=0),
     ]
 
     collection = ConstellationCollection(

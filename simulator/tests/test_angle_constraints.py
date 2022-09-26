@@ -2,7 +2,7 @@ from simulator.soopsimulator.python_sim_core.angle_constraints import (
     compute_angle,
     check_antenna_angle,
     AngleConstraintCalculator,
-    AngleConstraintsSettings,
+    AngleConstraintSettings,
 )
 
 import pytest
@@ -79,7 +79,7 @@ def test_4():
 def test_5():
     # Transmitter must be inside 45 degree cone oriented radially starting from receiver
     def filter(R, T, S):
-        settings = AngleConstraintsSettings(
+        settings = AngleConstraintSettings(
             direct_receiver=True,
             direct_transmitter=False,
             indirect_receiver=False,
@@ -116,7 +116,7 @@ def test_5():
 def test_6():
     # Specular point must be in 45 degree angle downwards from receiver
     def filter(R, T, S):
-        settings = AngleConstraintsSettings(
+        settings = AngleConstraintSettings(
             direct_receiver=False,
             direct_transmitter=False,
             indirect_receiver=True,
@@ -153,7 +153,7 @@ def test_6():
 def test_7():
     # Receiver must be in a 45 degree cone oriented vertically downward from transmitter
     def filter(R, T, S):
-        settings = AngleConstraintsSettings(
+        settings = AngleConstraintSettings(
             direct_receiver=False,
             direct_transmitter=True,
             indirect_receiver=False,
@@ -190,7 +190,7 @@ def test_7():
 def test_8():
     # Specular point must be in 45 degree angle downwards from transmitter
     def filter(R, T, S):
-        settings = AngleConstraintsSettings(
+        settings = AngleConstraintSettings(
             direct_receiver=False,
             direct_transmitter=False,
             indirect_receiver=False,
@@ -229,7 +229,7 @@ def test_9():
     # Angle between path from receiver to specular point and
     #   specular radial normal must be less than 45 degrees
     def filter(R, T, S):
-        settings = AngleConstraintsSettings(
+        settings = AngleConstraintSettings(
             direct_receiver=False,
             direct_transmitter=False,
             indirect_receiver=False,
@@ -284,7 +284,7 @@ def test_10():
     S[3, :, :, :] = [4.1, 0.0, 1.0]  # Both invalid
 
     # Transmitter and specular point must both be in 45 degree cone above or below
-    settings = AngleConstraintsSettings(
+    settings = AngleConstraintSettings(
         direct_receiver=True,
         direct_transmitter=False,
         indirect_receiver=True,
@@ -344,7 +344,7 @@ def test_11():
     S[3, 1, :, :] = [0.0, 9.0, 0.0]  # below down receiver
 
     # Test two constraints
-    settings = AngleConstraintsSettings(
+    settings = AngleConstraintSettings(
         direct_receiver=True,
         direct_transmitter=False,
         indirect_receiver=True,

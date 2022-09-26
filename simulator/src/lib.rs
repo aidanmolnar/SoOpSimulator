@@ -2,19 +2,11 @@ mod revisit;
 mod specular;
 mod vec3;
 
-use std::mem::MaybeUninit;
-use std::ops::Add;
-
 use revisit::find_revisits;
 use specular::find_specular_points;
-use vec3::Vec3;
 
-use crossbeam::channel::unbounded;
-use ndarray::ArrayViewMut;
-use numpy::ndarray::{s, Array, ArrayViewD, Axis, Dim};
 use numpy::{IntoPyArray, PyArrayDyn};
-use pyo3::{pyclass, pymodule, types::PyModule, PyResult, Python};
-use rayon::prelude::*;
+use pyo3::{pymodule, types::PyModule, PyResult, Python};
 
 pub const RAD_EARTH: f64 = 6371.; //Approximate radius of earth (km)
 

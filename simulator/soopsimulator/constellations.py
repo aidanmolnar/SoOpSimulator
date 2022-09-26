@@ -170,7 +170,7 @@ class ConstellationCollection:
                 np.ones(num_satellites) * config.zenith_cone_angle,
             )
 
-        nadir_angle_arr = np.stack(nadir_angle_list, axis=0)
-        zenith_angle_arr = np.stack(zenith_angle_list, axis=0)
+        nadir_angle_arr = np.concatenate(nadir_angle_list, axis=0)
+        zenith_angle_arr = np.concatenate(zenith_angle_list, axis=0)
 
         return (nadir_angle_arr, zenith_angle_arr)

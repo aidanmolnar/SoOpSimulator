@@ -136,10 +136,6 @@ fn find_specular_point_single(recv: Vec3, trans: Vec3) -> Vec3 {
         }
     }
 
-    // Incidence angles
-    //let recv_incidence_angle = compute_angle(recv - final_spec, final_spec);
-    //let trans_incidence_angle = compute_angle(trans - final_spec, final_spec);
-
     // Check that incidence angle is less than 90 degrees
     if (recv - final_spec).dot(&final_spec) > 0. && (trans - final_spec).dot(&final_spec) > 0. {
         &final_spec * RAD_EARTH
@@ -206,14 +202,3 @@ fn quartic_solver(a: f64, b: f64, c: f64, d: f64, e: f64) -> [f64; 4] {
 
     roots
 }
-
-// Helper functions, may be useful later
-// fn approx_equal(a: f64, b: f64, dp: u8) -> bool {
-//     let p = 10f64.powi(-(dp as i32));
-//     (a - b).abs() < p
-// }
-
-// fn compute_angle(a: Vec3, b: Vec3) -> f64 {
-//     let cos = dot(&a, &b) / (a.norm() * b.norm());
-//     cos.clamp(-1., 1.).acos()
-// }

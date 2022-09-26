@@ -54,17 +54,11 @@ fn find_revisits_slice(
     let spec_0_iter_array = speculars_0.into_shape(iter_shape).unwrap();
     let spec_1_iter_array = speculars_1.into_shape(iter_shape).unwrap();
 
-    //let (send_north, receive_north) = unbounded();
-    //let (send_south, receive_south) = unbounded();
-
-    // let plot_south = |x: usize, y: usize| send_south.send((x, y)).unwrap();
-    // let plot_north = |x: usize, y: usize| send_north.send((x, y)).unwrap();
-
     let mut plot_south = |x: usize, y: usize| count_south[[x, y]] += 1;
     let mut plot_north = |x: usize, y: usize| count_north[[x, y]] += 1;
 
     // Iterate over each segment
-    // TODO: make parallel
+    // TODO: Paralellize this somehow?
     spec_0_iter_array
         .axis_iter(Axis(0))
         .zip(spec_1_iter_array.axis_iter(Axis(0)))
@@ -85,25 +79,9 @@ fn find_revisits_slice(
                 pixels_per_side,
             );
         });
-    // drop(send_south);
-    // drop(send_north);
-
-    // for point in receive_south {
-    //     count_south[point] += 1;
-    // }
-
-    // for point in receive_north {
-    //     count_north[point] += 1;
-    // }
-
-    // TODO:
-    //   Iterate along every combination of R and T in spec_0 and spec_1 (flat slices (no t dimension))
-    //   Perform plotline / count for each one
-    //   Closure that allows more complicated counting scheme?
-    //   Will probably need to use a stream or something
-    //   Or maybe unsafe?
 }
 
+// See python version
 fn sphere_to_projection(point: Vec3) -> (f64, f64) {
     let mult = if point.z > 0.0 {
         (2.0 * RAD_EARTH * (RAD_EARTH - point.z)).sqrt()
@@ -122,6 +100,7 @@ fn sphere_to_projection(point: Vec3) -> (f64, f64) {
     }
 }
 
+// Rasterizes the path between two specular points
 fn plot_spec_trail<S, N>(
     spec_0: Vec3,
     spec_1: Vec3,
@@ -175,6 +154,7 @@ fn plot_spec_trail<S, N>(
     }
 }
 
+// Uses a modified version of bresenham's algorithm to rasterize the path between two points
 fn plot_line<F>(x0: f64, y0: f64, x1: f64, y1: f64, pixels_per_side: usize, mut plot: F)
 where
     F: FnMut(usize, usize),

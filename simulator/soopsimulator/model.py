@@ -1,8 +1,10 @@
+"""
+Signals of opportunity simulator.  An abstraction over the other code here.
+"""
+
 from constellations import (
-    Constellation,
     ConstellationCollection,
     PropagationConfig,
-    OrbitDefinition,
 )
 
 from rust_sim_core import find_specular_points, find_revisits
@@ -11,16 +13,11 @@ from python_sim_core.angle_constraints import (
     AngleConstraintSettings,
 )
 from python_sim_core.mask_ocean import mask_ocean
-from simulator.soopsimulator.constellations import NadirPointing
 from visualize.revisit import plot_coverage_3d_hemi, count_at_latitude
 from visualize.specular import plot_transmitter_receiver_pair
 from visualize.export_vtkjs import export_vtkjs
 
 import pyvista as pv
-
-# TODO: Add revisit statistics
-# TODO: Add visualization options
-# TODO: Set up chunking?:
 
 
 class SoOpModel:
@@ -42,6 +39,10 @@ class SoOpModel:
         self.count_south = None
 
     def propagate_orbits(self):
+        """
+        Calculate the positions of the transmitters and receivers over the given time
+        range and step size.
+        """
         self.transmitter_positions = self.transmitter_constellations.propagate_orbits(
             self.propagation_config
         )
@@ -50,6 +51,12 @@ class SoOpModel:
         )
 
     def calculate_specular_points(self):
+        """
+        Finds the specular reflection point between every combination of transmitter
+        and receiver at every time step.
+        Drops specular points that have an incidence angle of more than 90 degrees
+        (intersects with sphere).
+        """
         if self.receiver_positions is None or self.transmitter_positions is None:
             raise Exception(
                 "Must propagate orbits or set receiver/transmitter positions first"
@@ -65,6 +72,10 @@ class SoOpModel:
         angle_constraint_settings: AngleConstraintSettings,
         max_incidence_angle: float = 90,
     ):
+        """
+        Removes specular points that don't meet a set of angle constraints
+        (sets them to NaN).
+        """
         if self.specular_positions is None:
             raise Exception("Must calculate specular positions before filtering them")
 
@@ -92,6 +103,13 @@ class SoOpModel:
         ).filter_specular_points()
 
     def calculate_visit_counts(self, grid_size=10.0):
+        """
+        Counts the number of times a specular path passes through every cell over the
+        entire earth.
+        grid_size is the aproximate side length of the cells in km.
+        Uses a line drawing algorithm to ensure all cells intersect by the
+        path are incremented.
+        """
         if self.specular_positions is None:
             raise Exception(
                 "Must calculate specular positions before calculating revisit counts"
@@ -102,6 +120,9 @@ class SoOpModel:
         )
 
     def plot_revisit_frequency_3d(self, cmap="magma", clim=None, export=None):
+        """
+        Generates a 3d plot of the revisit frequency using pyvista.
+        """
         if self.count_south is None or self.count_north is None:
             raise Exception(
                 "Must calculate revisit counts before plotting revisit frequency"
@@ -137,6 +158,12 @@ class SoOpModel:
         export=None,
         cmap="rainbow",
     ):
+        """
+        Plots a single transmitter and receiver and their specular path over all time
+        steps. Draws lines representing the path of the reflected signal between the
+        transmitter and receiver.  Positions are in the IRTS Earth-Centered Earth-Fixed
+        reference frame.
+        """
         p = pv.Plotter()
         plot_transmitter_receiver_pair(
             p,
@@ -155,6 +182,9 @@ class SoOpModel:
         p.show()
 
     def mask_oceans(self):
+        """
+        Sets the revisit counts of any cells over the ocean to NaN.
+        """
         if self.count_south is None or self.count_north is None:
             raise Exception("Can't mask until counts have been computed")
         self.count_south = self.count_south.astype(float)
@@ -162,63 +192,13 @@ class SoOpModel:
         mask_ocean(self.count_south, self.count_north)
 
     def plot_latitude_coverage(self, threshold_frequency=1.0):
+        """
+        Plots the fraction of cells that meet a revisit frequency threshold vs latitude.
+        """
         threshold_count = threshold_frequency * self.propagation_config.t_range
         count_at_latitude(self.count_north, thresh=threshold_count)
 
     def plot_pancake_coverage(self):
-        # TODO
+        # TODO Similar to plot_revisit_frequency_3d,
+        # but the hemispheres would flattened to circles for easier viewing.
         pass
-
-
-if __name__ == "__main__":
-    receiver_orbits = []
-    for i in range(0, 360, int(360 / 8)):
-        orbit = OrbitDefinition(
-            e=0.0,
-            a=7620.0,
-            i=60.0,
-            raan=0.0,
-            aop=0.0,
-            ta=float(i),
-        )
-        receiver_orbits.append(orbit)
-
-    receiver_constellations = [
-        Constellation.from_orbit_definitions(receiver_orbits, NadirPointing(40.0, 40.0))
-    ]
-    receiver_collections = ConstellationCollection(receiver_constellations)
-
-    transmitter_constellations = [
-        Constellation.from_tle(
-            "data/TLE/gps.txt", antenna_configuration=NadirPointing(0.0, 90.0)
-        ),
-        Constellation.from_tle("data/TLE/glonass.txt", NadirPointing(0.0, 90.0)),
-        Constellation.from_tle("data/TLE/galileo.txt", NadirPointing(0.0, 90.0)),
-        Constellation.from_tle("data/TLE/beidou.txt", NadirPointing(0.0, 90.0)),
-        Constellation.from_tle("data/TLE/iridium.txt", NadirPointing(0.0, 90.0)),
-    ]
-    transmitter_collections = ConstellationCollection(transmitter_constellations)
-
-    model = SoOpModel(
-        receiver_collections,
-        transmitter_collections,
-        PropagationConfig(t_step=1 / (24 * 60), t_range=30.0),
-    )
-
-    model.propagate_orbits()
-    model.calculate_specular_points()
-    model.filter_by_angle_constraints(
-        AngleConstraintSettings(
-            direct_receiver=True,
-            indirect_receiver=True,
-            direct_transmitter=True,
-            indirect_transmitter=True,
-            incidence=True,
-        ),
-        max_incidence_angle=60.0,
-    )
-    model.calculate_visit_counts(grid_size=10.0)
-    # model.plot_transmitter_receiver_pair()
-    # model.mask_oceans()
-    model.plot_latitude_coverage(threshold_frequency=0.333)
-    model.plot_revisit_frequency_3d(clim=(0, 1 / 1.0))

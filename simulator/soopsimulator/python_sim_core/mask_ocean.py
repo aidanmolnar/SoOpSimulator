@@ -4,6 +4,9 @@ from .revisit import PROJECTION_LENGTH, RAD_EARTH, projection_to_sphere
 
 
 def mask_ocean(count_south: np.ndarray, count_north: np.ndarray):
+    """
+    Sets the count of cells in the ocean to NaN
+    """
     pixels_per_side = count_south.shape[0]
     edges = np.linspace(
         -0.5 * PROJECTION_LENGTH, 0.5 * PROJECTION_LENGTH, pixels_per_side + 1

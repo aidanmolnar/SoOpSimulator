@@ -1,3 +1,11 @@
+"""
+This module has tools for defining/loading collections of
+satellite constellations.
+Also handles propagating their positions using skyfield.
+Antenna configurations (cone angles) can be defined for constellations.
+"""
+
+
 from typing_extensions import Self
 from skyfield.api import load
 from skyfield.positionlib import Geocentric
@@ -10,12 +18,20 @@ import numpy as np
 from dataclasses import dataclass
 
 
+# TODO: Add more possible antenna configurations
+#  Make this a real abstract class
 class AntennaConfiguration:
     pass
 
 
 @dataclass
 class NadirPointing(AntennaConfiguration):
+    """
+    Definines two antennas for the satellite:
+    One upward facing (zenith)
+    One downward facing (nadir)
+    """
+
     zenith_cone_angle: float  # (deg)
     nadir_cone_angle: float  # (deg)
 
@@ -47,8 +63,12 @@ class OrbitDefinition:
         return np.sqrt(mu / np.power(self.a, 3.0))
 
 
-# A group of satellites with the same antenna configuration or from the same TLE
 class Constellation:
+    """
+    A group of satellites with the same antenna configuration or from the same TLE.
+    Can be loaded from a TLE, or defined with keplerian elements.
+    """
+
     def __init__(
         self,
         satellites: list[EarthSatellite],
@@ -62,6 +82,10 @@ class Constellation:
         antenna_configuration: AntennaConfiguration,
         indices_to_use=None,
     ):
+        """
+        Load satellite orbits from a TLE. Can have multiple satellites in the TLE.
+        indices_to_use defines which entries in the TLE to keep.
+        """
         satellites = load.tle_file(tle_path)
         if indices_to_use is None:
             return Constellation(satellites, antenna_configuration)
@@ -74,6 +98,9 @@ class Constellation:
         orbit_definitions: list[OrbitDefinition],
         antenna_configuration: AntennaConfiguration,
     ):
+        """
+        Define satellite orbits manually with a list of orbit definitions.
+        """
         satellites = []
         for i, orbit in enumerate(orbit_definitions):
             # Define satellite using elements directly
@@ -100,6 +127,10 @@ class Constellation:
 
 @dataclass
 class PropagationConfig:
+    """
+    Defines the time samples to get orbital positions for.
+    """
+
     t_step: float  # Time between orbit sample points (days)
     t_range: float  # How long to simulate for (days)
 
@@ -110,6 +141,12 @@ class PropagationConfig:
 
 
 class ConstellationCollection:
+    """
+    A group of satellite constellations.
+    In practice there is one group for receiver cosntellations and
+    one group for transmitter constellations.
+    """
+
     def __init__(
         self,
         constellations: list[Constellation],
@@ -117,8 +154,11 @@ class ConstellationCollection:
         self.constellations = constellations
         self.ts = load.timescale()
 
-    # List of all satellites in the collection
+    #
     def get_satellites(self) -> list[EarthSatellite]:
+        """
+        List of all satellites in the collection.
+        """
         satellites = []
         for constellation in self.constellations:
             satellites.extend(constellation.satellites)
@@ -131,10 +171,12 @@ class ConstellationCollection:
             epochs[i] = satellite.epoch.tai
         return np.average(epochs)
 
-    # Get IRTS coordinates of satellites over time samples defined by propagation config
-    # Returns a numpy array of (len(time samples), len(satellites) , 3)
-    # Last dimension is x,y,z in IRTS
     def propagate_orbits(self, propagation_config: PropagationConfig) -> np.ndarray:
+        """
+        Get IRTS coordinates of satellites over time samples defined by propagation
+        config. Returns a numpy array of (len(time samples), len(satellites) , 3)
+        Last dimension is x,y,z in IRTS
+        """
         satellites = self.get_satellites()
 
         t_middle = ConstellationCollection.get_average_epoch_tai(satellites)
@@ -154,8 +196,10 @@ class ConstellationCollection:
 
     # TODO: needs tests
     # TODO: needs better name
-    # Returns the satellite antenna nadir and zenith cone angle (in deg)
     def get_angles(self):
+        """
+        Returns the satellite antenna nadir and zenith cone angle (in deg)
+        """
         nadir_angle_list = []
         zenith_angle_list = []
 

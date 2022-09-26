@@ -1,8 +1,15 @@
-from model import (
+"""
+Examples demonstrating use of simulator and visualization options.
+"""
+
+from constellations import (
     Constellation,
-    ConstellationCollection,
     OrbitDefinition,
     NadirPointing,
+)
+
+from model import (
+    ConstellationCollection,
     SoOpModel,
     PropagationConfig,
     AngleConstraintSettings,
@@ -15,6 +22,9 @@ from model import (
 
 
 def gps_pair_scene():
+    """
+    Plots the specular trail between two GPS satellites.
+    """
     receiver_constellations = [
         Constellation.from_tle(
             "data/TLE/gps.txt",
@@ -45,6 +55,9 @@ def gps_pair_scene():
 
 
 def galileo_with_iridium_scene():
+    """
+    Plots the specular trail between a galileo gnss satelite and an iridium satelite.
+    """
     receiver_constellations = [
         Constellation.from_tle(
             "data/TLE/galileo.txt",
@@ -77,6 +90,15 @@ def galileo_with_iridium_scene():
 
 
 def bulk_coverage_scene():
+    """
+    Calculates the revisit frequency of a constellation of 8 receiver satellites
+    evenly spread by true anomaly with an orbit inclination of 60 degrees
+    and a semi major axis of 7620 km.  Various L-band transmitter constellations
+    are used (orbits loaded from TLES from Celestrak). Receivers have a 40 degree
+    antenna cone angle in the nadir and zenith direction to receive direct/indirect
+    signals.  If the direct and indirect signals do not enter one of these cones
+    the specular point is discarded.
+    """
     receiver_orbits = []
     for i in range(0, 360, int(360 / 8)):
         orbit = OrbitDefinition(
@@ -130,6 +152,12 @@ def bulk_coverage_scene():
 
 
 def skynet_coverage_scene():
+    """
+    Calculates the revisit frequency of a constellation of 8 receiver satellites
+    evenly spread by true anomaly with an orbit inclination of 60 degrees
+    and a semi major axis of 7620 km.  5 skynet transmitters in GEO are used.
+    Revisit coverage is limited to where the transmitters have visibility.
+    """
     receiver_orbits = []
     for i in range(0, 360, int(360 / 8)):
         orbit = OrbitDefinition(

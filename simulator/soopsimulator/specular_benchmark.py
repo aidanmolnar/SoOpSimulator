@@ -1,3 +1,11 @@
+"""
+Comparison of specular point calculations:
+1. Original using giant numpy arrays
+2. Jitted version with numba
+3. Rust version using pyo3
+All of them could be optimized more effectively, this was mostly out of curioisty.
+"""
+
 from simulator.soopsimulator.constellations import (
     Constellation,
     ConstellationCollection,
